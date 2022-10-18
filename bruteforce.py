@@ -2,16 +2,18 @@
 
 
 import csv
+from math import factorial
+from itertools import combinations
 
 ACTIONS_LIST_FILE = "ActionsList.csv"
 MAX_INVESTMENT = 500
 
 actions, all_actions, all_combinations = [], [], []
-best_combination = { 'actions': [], 'profit': 0 }
+best_combination = { 'actions': [], 'investment' : 0, 'profit': 0 }
 
 
 class Action:
-    """Classe des actions"""
+    """Actions class"""
 
     def __init__(self, name, price, profit) -> None:
         self.name = name
@@ -19,76 +21,55 @@ class Action:
         self.profit = price*(profit/100) # Convert percent profit in euros        
 
 
-"""Fill the "actions" array with action objects from the CSV file."""
-def fill_actions_array():
+"""Fill the "actions" list with action objects from the CSV file."""
+def fill_actions_list():
     with open(ACTIONS_LIST_FILE) as csvFile:
         reader = csv.DictReader(csvFile, delimiter=',')
         for line in reader:
-            actions.append(Action(line['name'], int(line['price']), int(line['profit'])))
+            actions.append(Action(line['name'], float(line['price']), float(line['profit'])))
 
-
-"""Initialize combinations array with the simplest combinations (one combination = one action)
-   and the full combination (the combination with all the actions)."""
-def initialize_combinations_array():
-    for action in actions:
-        all_combinations.append([action])
-        all_actions.append(action)
-    all_combinations.append(all_actions)
-
-"""Find all combinations and save them in "all_combinations" array."""
 def find_all_combinations():
-    # "prefix_length" corresponds to the number of actions grouped together to be added to each of the other actions.
-    for prefix_length in range(1,len(actions)-1):
-        # "combinations_indexes" array contains the indexes corresponding
-        # to the positon of the action in the "actions" array.
-        combinations_indexes = []
-        combination_length = prefix_length + 1
-        # Initialize the "combinations_indexes" array
-        for i in range(combination_length):
-            combinations_indexes.append(i)
-        while combinations_indexes[0] <= len(actions)-1-prefix_length:
-            last_index = combinations_indexes[-1]
-            while combinations_indexes[-1] <= len(actions)-1:
-                combination = []
-                for i in range(combination_length):
-                    combination.append(actions[combinations_indexes[i]])
-                all_combinations.append(combination)
-                combinations_indexes[-1] += 1
-            for i in range(combination_length-1):
-                combinations_indexes[i] += 1
-            combinations_indexes[-1] = last_index +1
+    for i in range(1,len(actions)+1):
+        for j in combinations(actions,i):
+            all_combinations.append(j)
+    
 
-"""Calculate the total profit of the combination of actions."""
+"""Calculate the total profit of a combination of actions."""
 def calculate_combination_profit(combination):
         investment, profit = 0, 0
         for action in combination:
             investment += action.price
             if (investment > MAX_INVESTMENT):
-                return None
+                return None, None
             profit += action.profit
-        return profit
+        return investment, profit
 
 def keep_best_combination():
     for combination in all_combinations:
-        combination_profit = calculate_combination_profit(combination)
+        combination_investment, combination_profit = calculate_combination_profit(combination)
         if combination_profit is not None:
             if combination_profit > best_combination['profit']:
                 best_combination['actions'] = combination
+                best_combination['investment'] = combination_investment
                 best_combination['profit'] = combination_profit
 
+def calculate_all_possible_theoretical_combinations(n):
+    sum = 0
+    for i in range(1,n+1):
+        sum += factorial(n)/(factorial(i)*factorial(n-i))
+    print(f"\nLe nombre de combinaisons théoriques possibles est de {sum}.")
+
 def display_result():
+    calculate_all_possible_theoretical_combinations(len(actions))
     print(f"\nLe nombre de combinaisons trouvées est de {len(all_combinations)}.")
     print(f"\nLa meilleure combinaison d'actions est : \n")
-    investment, profit = 0, 0
     for action in best_combination['actions']:
         print(action.name)
-        investment += action.price
-        profit += action.profit
-    print(f"\npour un profit maximum  de {profit} et un investissement de {investment}.")
+    print(f"\npour un profit maximum de {round(best_combination['profit'],2)}")
+    print(f"\net un investissement de {round(best_combination['investment'],2)}.\n")
 
 def main():
-    fill_actions_array()
-    initialize_combinations_array()
+    fill_actions_list()
     find_all_combinations()
     keep_best_combination()
     display_result()
