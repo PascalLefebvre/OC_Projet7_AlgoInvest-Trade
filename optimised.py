@@ -6,7 +6,8 @@ import csv
 ACTIONS_LIST_FILE = "ActionsList.csv"
 MAX_INVESTMENT = 500
 
-actions, combination = [], []
+actions, actions_states = [], []
+right_leaf_nodes = [] # Nodes Upper Bound Values
 
 
 class Action:
@@ -16,7 +17,7 @@ class Action:
         self.name = name
         self.price = price
         self.percentage_profit = percentage_profit
-        self.profit_amount = round(price*(percentage_profit/100),2)
+        self.profit_amount = price*(percentage_profit/100)
     
     def __str__(self):
         return f"{self.name} / {self.percentage_profit} % / {self.price} € / {round(self.profit_amount,2)} €"
@@ -25,10 +26,13 @@ class Action:
 class Node:
     """Nodes class"""
 
-    def __init__(self, current_profit, current_investment, current_upper_bound) -> None:
-        self.current_profit = current_profit
-        self.current_investment = current_investment
-        self.current_upper_bound = current_upper_bound
+    def __init__(self, ubv, sum_profits, sum_prices, depth, state, parent_node) -> None:
+        self.ubv = ubv # Upper Bound Value
+        self.sum_profits = sum_profits
+        self.sum_prices = sum_prices
+        self.depth = depth
+        self.state = state
+        self.parent = parent_node
         self.leftChild = None
         self.rightChild = None
 
@@ -37,18 +41,6 @@ class Node:
     
     def insertRight(self,new_node):
         self.rightChild = new_node
-    
-    def getRightChild(self):
-        return self.rightChild
-
-    def getLeftChild(self):
-        return self.leftChild
-
-    """def setRootVal(self,obj):
-        self = obj
-
-    def getRootVal(self):
-        return self"""
 
 
 """Fill the "actions" list with action objects from the CSV file."""
@@ -88,71 +80,76 @@ def merge_sort(list):
             k += 1
     return list
 
-def calculate_upper_bound_value(actions_states):
-    cumulative_profit = 0
-    cumulative_investment = 0
-    print(f"\nEtat des actions : {actions_states}")
+def calculate_ubv_value():
+    sum_profits = 0
+    investment = 0
+    for i in range(len(actions)-1, -1, -1):
+        if actions_states[i] == 1:
+            investment += actions[i].price
+            sum_profits += actions[i].profit_amount
+            if investment > MAX_INVESTMENT:
+                investment -= actions[i].price
+                sum_profits -= actions[i].profit_amount
+                # Split up the amount profit of the last reviewed action to achieve the exact MAX_INVESTMENT amount
+                sum_profits += (actions[i].profit_amount/actions[i].price)*(MAX_INVESTMENT-investment)
+                return sum_profits
+    return sum_profits
+
+def update_actions_states(node):
+    while node.parent != None:
+        actions_states[len(actions)-node.depth] = node.state
+        node = node.parent
+    return actions_states
+
+def expand_tree(parent_node):
+    global actions_states, right_leaf_nodes
+    if parent_node.depth == len(actions):
+        actions_states = update_actions_states(parent_node)
+        return None
+    index = len(actions)-parent_node.depth-1
+    actions_states[index] = 0
+    right_node = Node(calculate_ubv_value(), parent_node.sum_profits, parent_node.sum_prices,
+                      parent_node.depth+1, 0, parent_node)
+    actions_states[index] = 1
+    parent_node.insertRight(right_node)
+    actions_states = update_actions_states(parent_node)
+    if parent_node.sum_prices+actions[index].price <= MAX_INVESTMENT:
+        left_node = Node(parent_node.ubv, parent_node.sum_profits+actions[index].profit_amount,
+                            parent_node.sum_prices+actions[index].price, parent_node.depth+1, 1, parent_node)
+        parent_node.insertLeft(left_node)
+        right_leaf_nodes.append((right_node))
+        if len(right_leaf_nodes) >= 2:
+            if right_node.ubv < right_leaf_nodes[-2].ubv:
+                right_leaf_nodes = sorted(right_leaf_nodes, key=lambda node: node.ubv)
+        expand_tree(left_node)
+    else:
+        right_leaf_nodes.append((right_node))
+        if len(right_leaf_nodes) >= 2:
+            if right_node.ubv < right_leaf_nodes[-2].ubv:
+                right_leaf_nodes = sorted(right_leaf_nodes, key=lambda node: node.ubv)
+        expand_tree(right_leaf_nodes.pop())
+
+def display_result():
+    print(f"\nLa meilleure combinaison d'actions est : \n")
+    sum_profits = 0
+    investment = 0
     i = 0
     for i in range(len(actions)-1, -1, -1):
         if actions_states[i] == 1:
-            if cumulative_investment > MAX_INVESTMENT:
-                cumulative_investment -= actions[i+1].price
-                # Split up the amount profit of the last reviewed action to achieve the exact MAX_INVESTMENT amount
-                cumulative_profit += (actions[i+1].profit_amount/actions[i+1].price)*(MAX_INVESTMENT-cumulative_investment)
-                print(f"Dernière action : {actions[i+1].name}")
-                print(f"Cunulative investment / profit : {round(cumulative_investment,2)} / {round(cumulative_profit,2)}")
-                return round(cumulative_profit,2)
-            else:
-                cumulative_investment += actions[i].price
-                cumulative_profit += actions[i].profit_amount
+            print(f"{actions[i].name}")
+            investment += actions[i].price
+            sum_profits += actions[i].profit_amount
         i -= 1
-    print(f"Dernière action : {actions[0].name}")
-    print(f"Cunulative investment / profit : {round(cumulative_investment,2)} / {round(cumulative_profit,2)}")
-    return round(cumulative_profit,2)
-
-def expand_tree(parent_node, bis_actions, actions_states):
-    global combination
-    if len(bis_actions) == 0:
-        return None
-    right_node = Node(parent_node.current_profit,
-                      parent_node.current_investment,
-                      calculate_upper_bound_value(actions_states))
-    parent_node.insertRight(right_node)
-    expand_left_tree = False
-    if parent_node.current_investment+bis_actions[-1].price <= MAX_INVESTMENT:
-        left_node = Node(parent_node.current_profit+bis_actions[-1].profit_amount,
-                        parent_node.current_investment+bis_actions[-1].price,
-                        parent_node.current_upper_bound)
-        parent_node.insertLeft(left_node)
-        if left_node.current_upper_bound >= right_node.current_upper_bound:
-            expand_left_tree = True
-            combination.append(bis_actions.pop())
-            expand_tree(left_node, bis_actions, actions_states)
-    if not expand_left_tree:
-        bis_actions.pop()
-        actions_states[len(bis_actions)-len(actions)] = 0
-        expand_tree(right_node, bis_actions, actions_states)
-
-def display_result():
-    for action in actions:
-        print(action)
-    print(f"\nLa meilleure combinaison d'actions est : \n")
-    investment, profit = 0, 0
-    for action in combination:
-        print(action.name)
-        investment += action.price
-        profit += action.profit_amount
-    print(f"\npour un profit maximum  de {round(profit,2)} et un investissement de {round(investment,2)}.\n")
+    print(f"\npour un profit maximum  de {round(sum_profits,2)} et un investissement de {round(investment,2)}.\n")
 
 def main():
-    global actions
+    global actions, actions_states
     fill_actions_list()
     actions = merge_sort(actions)
-    bis_actions = actions.copy()
     actions_states = [ 1 for i in range(1,len(actions)+1) if i]
 
-    root_node = Node(0, 0, calculate_upper_bound_value(actions_states))
-    expand_tree(root_node, bis_actions, actions_states)
+    root_node = Node(calculate_ubv_value(), 0, 0, 0, 0, None)
+    expand_tree(root_node)
 
     display_result()
 
