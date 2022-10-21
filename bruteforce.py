@@ -3,45 +3,65 @@
 
 import csv
 from math import factorial
-from itertools import combinations
 
-ACTIONS_LIST_FILE = "ActionsList.csv"
+SHARES_FILE = "data/shares_list.csv"
 MAX_INVESTMENT = 500
 
-actions, all_actions, all_combinations = [], [], []
-best_combination = { 'actions': [], 'investment' : 0, 'profit': 0 }
+shares, all_combinations = [], []
+best_combination = { 'shares': [], 'investment' : 0, 'profit': 0 }
 
 
-class Action:
-    """Actions class"""
+class Share:
+    """Shares class"""
 
     def __init__(self, name, price, profit) -> None:
         self.name = name
         self.price = price
-        self.profit = price*(profit/100) # Convert percent profit in euros        
+        self.profit = price*(profit/100) # Convert percent profit in euros
 
+    def __str__(self):
+        return f"{self.name} / {self.price} € / {round(self.profit,2)} €"
 
-"""Fill the "actions" list with action objects from the CSV file."""
-def fill_actions_list():
-    with open(ACTIONS_LIST_FILE) as csvFile:
+"""Fill the "shares" list with share objects from the CSV file."""
+def fill_shares_list():
+    with open(SHARES_FILE) as csvFile:
         reader = csv.DictReader(csvFile, delimiter=',')
         for line in reader:
-            actions.append(Action(line['name'], float(line['price']), float(line['profit'])))
+            shares.append(Share(line['name'], float(line['price']), float(line['profit'])))
+
+"""Source code for 'itertools.combinations' function."""
+def combinations(iterable, r):
+    pool = tuple(iterable)
+    n = len(pool)
+    if r > n:
+        return
+    indices = list(range(r))
+    yield tuple(pool[i] for i in indices)
+    while True:
+        for i in reversed(range(r)):
+            if indices[i] != i + n - r:
+                break
+        else:
+            return
+        indices[i] += 1
+        for j in range(i+1, r):
+            indices[j] = indices[j-1] + 1
+        yield tuple(pool[i] for i in indices)
 
 def find_all_combinations():
-    for i in range(1,len(actions)+1):
-        for j in combinations(actions,i):
+    for i in range(1,len(shares)+1):
+        for j in combinations(shares,i):
             all_combinations.append(j)
     
 
-"""Calculate the total profit of a combination of actions."""
+"""Calculate the total profit of a combination of shares."""
 def calculate_combination_profit(combination):
         investment, profit = 0, 0
-        for action in combination:
-            investment += action.price
+        for share in combination:
+            investment += share.price
             if (investment > MAX_INVESTMENT):
                 return None, None
-            profit += action.profit
+            profit += share.profit
         return investment, profit
 
 def keep_best_combination():
@@ -49,7 +69,7 @@ def keep_best_combination():
         combination_investment, combination_profit = calculate_combination_profit(combination)
         if combination_profit is not None:
             if combination_profit > best_combination['profit']:
-                best_combination['actions'] = combination
+                best_combination['shares'] = combination
                 best_combination['investment'] = combination_investment
                 best_combination['profit'] = combination_profit
 
@@ -57,19 +77,19 @@ def calculate_all_possible_theoretical_combinations(n):
     sum = 0
     for i in range(1,n+1):
         sum += factorial(n)/(factorial(i)*factorial(n-i))
-    print(f"\nLe nombre de combinaisons théoriques possibles est de {sum}.")
+    print(f"\nLe nombre de combinaisons théoriques possibles est de {int(sum)}.")
 
 def display_result():
-    calculate_all_possible_theoretical_combinations(len(actions))
+    calculate_all_possible_theoretical_combinations(len(shares))
     print(f"\nLe nombre de combinaisons trouvées est de {len(all_combinations)}.")
     print(f"\nLa meilleure combinaison d'actions est : \n")
-    for action in best_combination['actions']:
-        print(action.name)
+    for share in best_combination['shares']:
+        print(share)
     print(f"\npour un profit maximum de {round(best_combination['profit'],2)}")
     print(f"\net un investissement de {round(best_combination['investment'],2)}.\n")
 
 def main():
-    fill_actions_list()
+    fill_shares_list()
     find_all_combinations()
     keep_best_combination()
     display_result()
